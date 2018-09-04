@@ -1,0 +1,100 @@
+TRAIN:
+  epoches:      100
+  ep_size:      1000
+  batch_size:   1
+  save_ep:      10
+
+  num_readers:  4
+  num_threads:  4
+
+NET:
+  img_size:     416
+  grid_size:    13
+  num_anchors:  5
+  num_classes:  20
+  cls_offset:   1
+  threshold_iou1:    0.6  # loss
+  threshold_score:   0.3  # NMS
+  threshold_iou2:    0.3  # NMS
+  anchors:    [[0.67738, 0.57273],      # h, w
+               [2.06253, 1.87446],
+               [5.47434, 3.33843],
+               [3.52778, 7.88282],
+               [9.16828, 9.77052]]
+
+LR:
+  constant:
+    lr:           0.0001  # yaml不认识 1e-4
+  piecewise:
+    boundaries:   [30000, 60000]
+    values:       [0.0001, 0.00005, 0.00001]
+  exp:
+    # exp(exponential_decay) # 0.9**20 = 0.1215
+    lr:           0.0001
+    decay_steps:  20000
+    decay_rate:   0.9
+    staircase:    True
+  polynominal:
+    lr:           0.0001
+    end_lr:       0.00001
+    decay_steps:  10000
+    power:        1.0
+    cycle:        False
+
+OPTIM:
+  sgd:
+    # None
+  mom:
+    momentum: 0.9
+  rms:
+    momentum: 0.9
+    decay:    0.9
+  adagrad:
+    initial_accumulator_value: 0.1
+  adadelta:
+    rho: 0.95
+  adam:
+    belta1:  0.9
+    belta2:  0.999
+
+PATH:
+  train_data:
+    dir : './data/tfrecords/'
+    name: 'VOC2007'
+    split: 'trainval'
+
+  test_data:
+
+  checkpoint_dir: './checkpoints/'
+
+  log_dir:      './logs/'
+
+  finetune:
+    yolo_v2:
+      path: ~
+    resnet_v2_152:
+      path: './net/finetune_weights/resnet_v2_152/resnet_v2_152.ckpt'
+      checkpoint_exclude_scopes: ['global_step', 'pred', yolov2loss]
+      model_name: ~ # 'resnet_v2_152'
+      checkpoint_model_scope: ~ #'resnet_v2_152'
+    resnet_v2_50:
+      path: './net/finetune_weights/resnet_v2_50/resnet_v2_50.ckpt'
+      checkpoint_exclude_scopes: ['global_step','pred', yolov2loss]
+      model_name:  ~ #'resnet_v2_50'
+      checkpoint_model_scope:  ~ #'resnet_v2_50'
+
+  restore:
+    path: './checkpoints/'
+
+LOSS:
+  warmup_steps: 3000  # 大约3~5epoch，不用非常精确
+  weight_decay: 0.0
+  lambda_cls  : 1.0
+  lambda_coord: 5.0
+  lambda_obj  : 1.0
+  lambda_noobj: 0.5
+
+GPU:
+  gpu_memory_fraction:  0.9
+  allow_growth:         True
+  allow_soft_placement: True
