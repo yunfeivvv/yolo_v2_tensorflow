@@ -2,7 +2,7 @@ import tensorflow as tf
 from net import loss
 slim = tf.contrib.slim
 
-# 现在所有的模型都用相同的loss
+# 目前所有的模型都用相同的loss
 losses_map = {
     'yolov2':loss.yolo_loss,
     'yolov1':loss.yolo_loss,
