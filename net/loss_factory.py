@@ -2,12 +2,10 @@ import tensorflow as tf
 from net import loss
 slim = tf.contrib.slim
 
-# 目前所有的模型都用相同的loss
+# 现在所有的模型都用相同的loss
 losses_map = {
-    'yolov2':loss.yolo_loss,
-    'yolov1':loss.yolo_loss,
-    'resnet_v2_50': loss.yolo_loss,
-    'resnet_v2_152':loss.yolo_loss,
+    'yolo_v2':loss.yolo_loss_v2,
+    'yolo_v3':loss.yolo_loss_v3,
 }
 
 def get_loss(name, pred, gt, global_step, debug=True, **kwargs):

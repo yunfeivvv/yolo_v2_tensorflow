@@ -12,10 +12,10 @@ def save_cfg(output_dir, cfg):
                 f.write(cfg_str)
 
 
-def draw_bboxes(img, bboxes, VOC_LABELS):
-
+def draw_bboxes(img, bboxes, labels, offset=1):
+    img = img.copy()
     img_h, img_w = img.shape[:2]
-    readable_map = {it[1][0]: it[0] for it in VOC_LABELS.items()}
+    readable_map = {it[1][0]- offset: it[0] for it in labels.items()}
 
     for i in range(bboxes.shape[0]):
         cls = bboxes[i, 0]
@@ -26,13 +26,13 @@ def draw_bboxes(img, bboxes, VOC_LABELS):
         ymin = int(bbox[0] * img_h)
         xmax = int(bbox[3] * img_w)
         ymax = int(bbox[2] * img_h)
-        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 3)
+        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 1)
         cv2.putText(img,
-                    readable_map[cls] + ' ' + str(prob),
+                    readable_map[cls] + ' ' + str(prob)[:6],
                     (xmin, ymin - 13),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     1e-3 * img_h,
-                    (0, 0, 255), 2)
+                    (0, 0, 255), 1)
     return img
 
 
@@ -69,16 +69,15 @@ def finetune_init(sess, **kwargs):
     print("Fine tune from ", kwargs['path'])
 
 
-def restore_init(sess, **kwargs):
-
+def restore_init(sess, path):
     # restore
     load_vars = tf.global_variables()
     loader = tf.train.Saver(load_vars)
-    if tf.gfile.IsDirectory(kwargs['path']):
-        checkpoint_model = tf.train.get_checkpoint_state(kwargs['checkpoint_dir'])
+    if tf.gfile.IsDirectory(path):
+        checkpoint_model = tf.train.get_checkpoint_state(path)
         checkpoint_load = checkpoint_model.model_checkpoint_path
         loader.restore(sess, checkpoint_load)
         print("Restore from :", checkpoint_load)
     else:
-        loader.restore(sess, kwargs['path'])
-        print("Restore from :", kwargs['path'])
+        loader.restore(sess, path)
+        print("Restore from :", path)

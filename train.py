@@ -3,7 +3,7 @@ import csv
 import yaml
 import tensorflow as tf
 slim = tf.contrib.slim
-tf.set_random_seed(123)
+
 
 from data.dataset_factory import get_data
 from utils.processing import preprocess_for_train
@@ -17,8 +17,10 @@ flags = tf.app.flags
 flags.DEFINE_string('yml_path', './config.yml', '')
 flags.DEFINE_string('start_with', 'finetune', 'finetune / restore')
 
-flags.DEFINE_string('net_name', 'resnet_v2_152',
+flags.DEFINE_string('net_name', 'resnet_v2_50',
                     'yolo_v2 / resnet_v2_50 / resnet_v2_152')
+flags.DEFINE_string('loss_name', 'yolo_v3',
+                    'yolo_v2/yolo_v3/')
 flags.DEFINE_string('lr_name', 'exp',
                     'constant/piecewise/exp/polynominal')
 flags.DEFINE_string('optim_name', 'mom',
@@ -73,19 +75,18 @@ def main(_):
         # =================================================================== #
         #                          compute graph                              #
         # =================================================================== #
-        # todo : 添加eval部分
         # inference
         train_preds, train_end_points = get_net(FLAGS.net_name)(train_imgs, True, **NET_cfg)
 
         # loss
         global_step = tf.Variable(0, trainable=False, name='global_step')
-        loss, summary_loss = get_loss(FLAGS.net_name, train_preds, train_gts, global_step, True, **{**NET_cfg, **LOSS_cfg})
+        loss, summary_loss = get_loss(FLAGS.loss_name, train_preds, train_gts, global_step, True, **{**NET_cfg, **LOSS_cfg})
 
         # train op
         learning_rate = get_lr(FLAGS.lr_name, global_step, **LR_cfg[FLAGS.lr_name])
         optimizer = get_optim(FLAGS.optim_name, learning_rate, **OPTIM_cfg[FLAGS.optim_name])
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS) # 可以不显式指定
-        train_op = slim.learning.create_train_op(loss, optimizer, global_step, update_ops)
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        train_op = slim.learning.create_train_op(loss, optimizer, global_step, update_ops) # , clip_gradient_norm=5.0
 
         # summary
         train_summarys = []
@@ -93,13 +94,8 @@ def main(_):
         train_summarys.extend(summary_loss)
         train_merge = tf.summary.merge(train_summarys)
 
-        # eval_summarys = []
-        # ...
-        # eval_merge = tf.summary.merge(eval_summarys)
-
         # writer
         train_writer = tf.summary.FileWriter(PATH_cfg['log_dir'] + 'train/', tf.get_default_graph())
-        # eval_writer = tf.summary.FileWriter(PATH_cfg['log_dir'] + 'eval/')
 
 
         # =================================================================== #
@@ -129,11 +125,9 @@ def main(_):
 
             train_history = {'loss':[],
                              'step':[]}
-            eval_history = {}
-
             try:
                 print('====== Start Training ======')
-                l, s = 0. , 0
+
                 for ep in range(1, TRAIN_cfg['epoches']+1):
                     for xx in range(TRAIN_cfg['ep_size']):
                         l, m, s, _ = sess.run([loss, train_merge, global_step, train_op])
@@ -141,14 +135,12 @@ def main(_):
                         train_history['loss'].append(l)
                         train_history['step'].append(s)
                         train_writer.add_summary(m, global_step=s)
-                        print("Epoch:{:4d}, loss:{:.4f}".format(ep, l))
-
-                    # todo add valid
+                        # print("Epoch:{:4d}, loss:{:.4f}".format(ep, l))
 
                     # todo add vis fn
 
                     if (ep + 1) % TRAIN_cfg['save_ep'] == 0:
-                        saver.save(sess, PATH_cfg['checkpoint_dir'] + 'yolo2.ckpt', global_step=ep)
+                        saver.save(sess, PATH_cfg['checkpoint_dir'] + FLAGS.net_name+'.ckpt', global_step=ep)
 
 
             except tf.errors.OutOfRangeError:
