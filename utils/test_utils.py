@@ -2,63 +2,6 @@ import tensorflow as tf
 import numpy as np
 import cv2
 
-
-'''
-raw -->(scale tran)->(sparse->dense)--> gt \
-                                            \
-                                             \
-prior --> (iou) --> iou --> (相乘) --> mask --> ====>  loss
-            ^                 ^               /
-            |                 |              /
-        gt bboxes          gt score         / 
-                                           /
-pred --(sig等)--> pfn --(相加)--------> hat/
-                          ^
-                          |  
-                        prior
-
-pred --(sig等)--> pfn --(相加)--> hat ---> (筛选) --> (scale) -->raw
-                          ^                 ^
-                          |                 |
-                        prior           pred score
-
-
-
-表示方式：
-- prediction，       pred    模型输出
-- prediction func,   pfn     模型输出通过一个限制函数，
-- ground_truth，     gt      模型的label
-- ground_truth_hat， hat     模型输出转为gt形式
-- target，           tgt     label转成pred形式
-- prior，            p       先验信息，用于pred和gt两种形式之间的转换。
-
-注意：
-1：不同表示的量纲并不相同：gt中IMG是单位长度，pred中GRID是单位长度，建议统一转为GRID为单位。
-2：sigmoid(pred_yx) = pfn_yx, exp(pred_hw) = pfn_hw, 作为中间变量方便理解。
-
-命名：
-- pred_x, pred_y, pred_w, pred_h
-- pfn_x,  pfn_y,  pfn_w,  pfn_h
-- gt_x,   gt_y,   gt_w,   gt_h
-# - tgt_x,  tgt_y,  tgt_w,  tgt_h
-- hat_x,  hat_y,  hat_w,  hat_h
-- p_x,    p_y,    p_w,    p_h
-
-(pred_*对应论文中的t_*, p_*对应论文中的c_*/p_*, hat_*对应文中的b_*)
-*
-    hat_x = sig(pred_x) + p_x
-    hat_y = sig(pred_y) + p_y
-    hat_w = p_w * exp(pred_w)
-    hat_h = p_h * exp(pred_h)
-*
-    # tgt_x = d_sig(gt_x - p_x)
-    # tgt_y = d_sig(gt_y - p_y)
-    # tgt_w = log(gt_w / p_w)
-    # tgt_h = log(gt_h / p_h)
-    # d_sig(x) = -log(1/x - 1)
-'''
-
-
 def pred_to_hat(pred, neg_thred=0.6, **kwargs):
     '''
     pred 转换为 hat，即与gt相同的形式
