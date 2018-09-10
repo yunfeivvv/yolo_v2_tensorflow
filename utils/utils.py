@@ -1,6 +1,5 @@
 import os
 import cv2
-import numpy as np
 import tensorflow as tf
 slim = tf.contrib.slim
 
@@ -21,9 +20,7 @@ def draw_bboxes(img, bboxes, labels, offset=1):
     for i in range(bboxes.shape[0]):
         cls = bboxes[i, 0]
         prob = bboxes[i, 1]
-        bbox = np.clip(bboxes[i, 2:], 0.0, 1.0)
-        if np.any((bbox[2:]-bbox[:2])<[1/img_h,1/img_w]):
-            continue
+        bbox = bboxes[i, 2:]
 
         xmin = int(bbox[1] * img_w)
         ymin = int(bbox[0] * img_h)

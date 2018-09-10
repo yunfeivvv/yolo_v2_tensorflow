@@ -1,7 +1,6 @@
 import os
 import csv
 import yaml
-import time
 import tensorflow as tf
 slim = tf.contrib.slim
 
@@ -16,7 +15,7 @@ from utils.utils import finetune_init, restore_init
 
 flags = tf.app.flags
 flags.DEFINE_string('yml_path', './config.yml', '')
-flags.DEFINE_string('start_with', 'finetune', 'sketch/finetune / restore')
+flags.DEFINE_string('start_with', 'finetune', 'finetune / restore')
 
 flags.DEFINE_string('net_name', 'resnet_v2_50',
                     'yolo_v2 / resnet_v2_50 / resnet_v2_152')
@@ -32,7 +31,7 @@ FLAGS = flags.FLAGS
 
 
 def main(_):
-    symbol = time.strftime('%m-%d-%H-%M-%S', time.localtime())
+    symbol = None   # time.strftime('%m-%d-%H-%M-%S', time.localtime())
 
     # load configs
     with open(FLAGS.yml_path, 'r', encoding='utf-8') as f:
@@ -66,12 +65,12 @@ def main(_):
             [raw_img, raw_clses, raw_bboxes] = provider.get(['image', 'object/label', 'object/bbox'])
 
             # process
-            train_img, train_gt, padded_raw_bbox = preprocess_for_train(raw_img, raw_clses, raw_bboxes, **NET_cfg)
+            train_img, train_gt = preprocess_for_train(raw_img, raw_clses, raw_bboxes, **NET_cfg)
             # batch
-            train_imgs, train_gts, padded_raw_bboxes = tf.train.batch([train_img, train_gt, padded_raw_bbox],
-                                                                    batch_size=TRAIN_cfg['batch_size'],
-                                                                    num_threads=TRAIN_cfg['num_readers'],
-                                                                    capacity=5*TRAIN_cfg['batch_size'])
+            train_imgs, train_gts = tf.train.batch([train_img, train_gt],
+                                                   batch_size=TRAIN_cfg['batch_size'],
+                                                   num_threads=TRAIN_cfg['num_readers'],
+                                                   capacity=5*TRAIN_cfg['batch_size'])
 
         # =================================================================== #
         #                          compute graph                              #
@@ -81,13 +80,13 @@ def main(_):
 
         # loss
         global_step = tf.Variable(0, trainable=False, name='global_step')
-        loss, summary_loss = get_loss(FLAGS.loss_name, train_preds, train_gts, padded_raw_bboxes, global_step, True, **{**NET_cfg, **LOSS_cfg})
+        loss, summary_loss = get_loss(FLAGS.loss_name, train_preds, train_gts, global_step, True, **{**NET_cfg, **LOSS_cfg})
 
         # train op
         learning_rate = get_lr(FLAGS.lr_name, global_step, **LR_cfg[FLAGS.lr_name])
-        optimizer     = get_optim(FLAGS.optim_name, learning_rate, **OPTIM_cfg[FLAGS.optim_name])
-        update_ops    = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        train_op      = slim.learning.create_train_op(loss, optimizer, global_step, update_ops) # , clip_gradient_norm=5.0
+        optimizer = get_optim(FLAGS.optim_name, learning_rate, **OPTIM_cfg[FLAGS.optim_name])
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        train_op = slim.learning.create_train_op(loss, optimizer, global_step, update_ops) # , clip_gradient_norm=5.0
 
         # summary
         train_summarys = []
@@ -96,7 +95,7 @@ def main(_):
         train_merge = tf.summary.merge(train_summarys)
 
         # writer
-        train_writer = tf.summary.FileWriter(PATH_cfg['log_dir'] + 'train/' + symbol, tf.get_default_graph())
+        train_writer = tf.summary.FileWriter(PATH_cfg['log_dir'] + 'train/', tf.get_default_graph())
 
 
         # =================================================================== #
@@ -141,8 +140,7 @@ def main(_):
                     # todo add vis fn
 
                     if (ep + 1) % TRAIN_cfg['save_ep'] == 0:
-                        save_path = os.path.join(PATH_cfg['checkpoint_dir'], symbol, FLAGS.net_name+'.ckpt')
-                        saver.save(sess, save_path, global_step=ep)
+                        saver.save(sess, PATH_cfg['checkpoint_dir'] + FLAGS.net_name+'.ckpt', global_step=ep)
 
 
             except tf.errors.OutOfRangeError:
@@ -154,7 +152,7 @@ def main(_):
                 coord.request_stop()
                 print("finish reading")
 
-                metric_dir = os.path.join(PATH_cfg['log_dir'], 'metric', symbol)
+                metric_dir = os.path.join(PATH_cfg['log_dir'], 'metric')
                 if not os.path.exists(metric_dir):
                     os.makedirs(metric_dir)
 

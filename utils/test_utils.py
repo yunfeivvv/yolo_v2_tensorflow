@@ -2,8 +2,7 @@ import tensorflow as tf
 import numpy as np
 import cv2
 
-
-def pred_to_hat(pred, **kwargs):
+def pred_to_hat(pred, neg_thred=0.6, **kwargs):
     '''
     pred 转换为 hat，即与gt相同的形式
 
@@ -21,50 +20,44 @@ def pred_to_hat(pred, **kwargs):
         -* hat_clses:  [batch_szie, 13, 13, 5, 20]，
             取softmax就是预测的目标，因为20类不包括背景，所以要通过一个threshold。
     '''
-    na = kwargs['num_anchors']
-    nc = kwargs['num_classes']
-    gs = kwargs['grid_size']
-    gs_f = tf.to_float(gs)
 
     with tf.variable_scope("pred_to_hat"):
 
         with tf.variable_scope('pred_split'):
-            pred = tf.reshape(pred, [-1, gs, gs, na, 5 + nc])
-            pred_conf = pred[:,:,:,:,0:1]
-            pred_bbox = pred[:,:,:,:,1:5]
-            pred_bbox_yx = pred_bbox[:,:,:,:,0:2]
-            pred_bbox_hw = pred_bbox[:,:,:,:,2:4]
-            pred_cls  = pred[:,:,:,:,5:5+nc]
+            pred = tf.reshape(pred, [-1, kwargs['grid_size'], kwargs['grid_size'],
+                                     kwargs['num_anchors'], 5 + kwargs['num_classes']])
+            pred_scores = pred[..., 0:1]
+            pred_boxes = pred[..., 1:5]
+            pred_clses = pred[..., 5:]
 
         with tf.variable_scope('prior'):
-            p_x, p_y = tf.meshgrid(tf.range(gs),# height
-                                   tf.range(gs))# width
-            p_x = tf.cast(tf.reshape(p_x, [1, gs, gs, 1, 1]), tf.float32)
-            p_y = tf.cast(tf.reshape(p_y, [1, gs, gs, 1, 1]), tf.float32)
-            p_yx = tf.concat([p_y, p_x], axis=4)
-            p_hw = tf.reshape(kwargs['anchors'], [1, 1, 1, na, 2])
+            p_x, p_y = tf.meshgrid([i for i in range(kwargs['grid_size'])],
+                                   [i for i in range(kwargs['grid_size'])])
+            p_x = tf.cast(tf.reshape(p_x, [1, kwargs['grid_size'], kwargs['grid_size'], 1, 1]), tf.float32)
+            p_y = tf.cast(tf.reshape(p_y, [1, kwargs['grid_size'], kwargs['grid_size'], 1, 1]), tf.float32)
+            p_yx = tf.concat([p_y, p_x], axis=-1)
+            p_hw = tf.reshape(tf.constant(kwargs['anchors']), [1, 1, 1, kwargs['num_anchors'], 2])
 
         with tf.variable_scope("get_hat"):
-            hat_yx = (tf.sigmoid(pred_bbox_yx) + p_yx) / gs_f
-            hat_hw = tf.exp(pred_bbox_hw) * p_hw / gs_f
-            hat_bbox = tf.concat([hat_yx, hat_hw], axis=-1)
-            hat_conf = tf.sigmoid(pred_conf)
-            hat_cls = tf.sigmoid(pred_cls)
+            hat_boxes_yx = (tf.sigmoid(pred_boxes[..., 0:2]) + p_yx) / tf.to_float(kwargs['grid_size'])
+            hat_boxes_hw = tf.exp(pred_boxes[..., 2:4]) * p_hw / tf.to_float(kwargs['grid_size'])
+
+            hat_boxes = tf.concat([hat_boxes_yx, hat_boxes_hw], axis=-1)
+            hat_scores = tf.sigmoid(pred_scores)
+            hat_clses = tf.sigmoid(pred_clses)
 
         with tf.variable_scope('hat_to_dense_raw'):
             # to yxyx
-            ymid, xmid, height, width = tf.unstack(hat_bbox, axis=-1)
+            ymid, xmid, height, width = tf.unstack(hat_boxes, axis=-1)
             ymin = ymid - height / 2.
             xmin = xmid - width / 2.
             ymax = ymid + height / 2.
             xmax = xmid + width / 2.
-            yxyx_bbox = tf.stack([ymin, xmin, ymax, xmax], axis=-1)
+            yxyx_bboxes = tf.stack([ymin, xmin, ymax, xmax], axis=-1)
 
-            #selected = tf.where(tf.greater(hat_conf, neg_thred))    # 4-D
-            #scores = tf.gather(hat_conf,selected) #* tf.to_float(tf.greater(hat_conf, neg_thred))
-            #clses = tf.gather(hat_cls,selected) * scores
-
-            decoded_hat = tf.concat([hat_conf, yxyx_bbox, hat_cls*hat_conf], axis=-1)
+            scores = hat_scores * tf.to_float(tf.greater(hat_scores, neg_thred))    # score可以不返回
+            clses = hat_clses * scores
+            decoded_hat = tf.concat([scores, yxyx_bboxes, clses], axis=-1)
 
     return decoded_hat
 
@@ -103,7 +96,7 @@ def nms_tf(dense_raw, thred_iou=0.5, thred_prob=0.2, max_out=10, num_classes=20)
     return selected
 
 
-def nms_np(bboxes, clses, thred_iou=0.5, thred_prob=0.5):
+def nms_np(bboxes, clses, thred_iou=0.5, thred_prob=0.2):
     assert bboxes.shape[0] == clses.shape[0]
     assert bboxes.shape[1] == 4
     assert clses.shape[1] == 20

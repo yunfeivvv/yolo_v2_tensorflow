@@ -11,45 +11,39 @@ NET:
   img_size:     416
   grid_size:    13
   num_anchors:  5
-  max_bboxes_per_img: 20
   num_classes:  20
   cls_offset:   1
-
+  threshold_neg:     0.5  # loss, 如果iou(pred, gt)<threshold_neg, 那么记作neg
   #thred_prob:   0.3  # NMS
   #thred_iou:    0.5  # NMS
-  anchors:    [[1.73145,1.32210],     # h, w, voc
+  anchors:    [[1.73145,1.3221],     # h, w, voc
                [4.00944,3.19275],
                [8.09892,5.05587],
                [4.84053,9.47112],
                [10.0071,11.2364]]
-               
-               #[[1., 1.],  # test
-               # [1., 2.], 
-               # [2., 1.], 
-               # [2., 2.], 
-               # [3., 2.]]
-               
-               #[[0.67738, 0.57273],  # h, w, coco
+
+              #[[0.67738, 0.57273],  # h, w, coco
                #[2.06253, 1.87446],
                #[5.47434, 3.33843],
                #[3.52778, 7.88282],
                #[9.16828, 9.77052]]
 
+
 LR:
   constant:
-    lr:           0.0001 
+    lr:           0.001 
   piecewise:
     boundaries:   [30000, 60000]
     values:       [0.001, 0.0005, 0.0001]
   exp:
     # exp(exponential_decay) # 0.9**20 = 0.1215
-    lr:           0.0001
-    decay_steps:  10000
+    lr:           0.001
+    decay_steps:  20000
     decay_rate:   0.9
     staircase:    False
   polynominal:
-    lr:           0.0001
-    end_lr:       0.00001
+    lr:           0.001
+    end_lr:       0.0001
     decay_steps:  10000
     power:        1.0
     cycle:        False
@@ -73,14 +67,14 @@ OPTIM:
 PATH:
   train_data:
     dir : './data/tfrecords/'
-    name: 'VOC2007'  # 'VOC2007', 'VOC212', ''
-    split: 'all'     # 'train', 'trainval', 'all'
+    name: 'VOC2007'
+    split: 'all'
 
-  test_data: ~
+  test_data:
 
   checkpoint_dir: './checkpoints/'
 
-  log_dir: './logs/'
+  log_dir:      './logs/'
 
   finetune:
     yolo_v2:
@@ -88,26 +82,25 @@ PATH:
     resnet_v2_152:
       path: './net/finetune_weights/resnet_v2_152/resnet_v2_152.ckpt'
       checkpoint_exclude_scopes: ['global_step', 'pred', 'yolo_loss']
-      model_name: ~                 #'resnet_v2_152'
-      checkpoint_model_scope: ~     #'resnet_v2_152'
+      model_name: ~ # 'resnet_v2_152'
+      checkpoint_model_scope: ~ #'resnet_v2_152'
     resnet_v2_50:
       path: './net/finetune_weights/resnet_v2_50/resnet_v2_50.ckpt'
       checkpoint_exclude_scopes: ['global_step','pred', 'yolo_loss']
-      model_name: ~                 #'resnet_v2_50'
-      checkpoint_model_scope: ~     #'resnet_v2_50'
+      model_name:  ~ #'resnet_v2_50'
+      checkpoint_model_scope:  ~ #'resnet_v2_50'
 
   restore:
-    resnet_v2_50: './checkpoints/09-10-13-11-29/resnet_v2_50.ckpt-89'
+    resnet_v2_50: './checkpoints/'
     resnet_v2_152: './checkpoints/'
 
 LOSS:
-  thred_neg   : 0.5 
-  warmup_steps: 1000
-  weight_decay: 0.0
+  warmup_steps: 500
+  weight_decay: 0.00005
   lambda_cls  : 1.0
   lambda_coord: 5.0
   lambda_obj  : 1.0
-  lambda_noobj: 1.0
+  lambda_noobj: 0.5
 
 GPU:
   gpu_memory_fraction:  0.9
