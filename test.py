@@ -16,9 +16,9 @@ from utils.test_utils import pred_to_hat, nms_tf, nms_np
 
 flags = tf.app.flags
 flags.DEFINE_string('yml_path', './config.yml', '')
-flags.DEFINE_string('img_path', './test_imgs/dog.jpg', '')
+flags.DEFINE_string('img_path', './test_imgs/person.jpg', '')
 flags.DEFINE_float('thred_iou', 0.5, '')
-flags.DEFINE_float('thred_prob', 0.3, '')
+flags.DEFINE_float('thred_prob', 0.7, '')
 
 flags.DEFINE_string('net_name', 'resnet_v2_50',
                     'yolo_v2 / resnet_v2_50 / resnet_v2_152')
