@@ -5,8 +5,8 @@ def _cal_iou_wh(h1, w1, h2, w2):
     intersect_w = tf.cond(tf.less(w1, w2), lambda: w1, lambda: w2)
     intersect_h = tf.cond(tf.less(h1, h2), lambda: h1, lambda: h2)
     intersect = intersect_h * intersect_w
-    union = h1 * w1 + h2 * w2 - intersect
-    iou = tf.clip_by_value(intersect / union, 0.0, 1.0)
+    union = tf.maximum(h1 * w1 + h2 * w2 - intersect, 1e-8)
+    iou = intersect / union
     return iou
 
 
@@ -68,7 +68,7 @@ def _preprocessed_bboxes(raw_clses, raw_bboxes, **kwargs):
 
             # 更新
             processed_conf   = tf.where(mask                        , conf_tmp, processed_conf)
-            processed_bboxes = tf.where(tf.tile(mask, [1, 1, 1, 4 ]), bbox_tmp, processed_bboxes)  # norm!!!
+            processed_bboxes = tf.where(tf.tile(mask, [1, 1, 1, 4 ]), bbox_tmp, processed_bboxes)
             processed_clses  = tf.where(tf.tile(mask, [1, 1, 1, nc]), one_hot , processed_clses)
 
             return [i + 1, raw_clses, raw_bboxes, processed_conf, processed_bboxes, processed_clses]

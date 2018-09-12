@@ -2,25 +2,8 @@ import tensorflow as tf
 import numpy as np
 import cv2
 
+def decode_pred(pred, thred_prob, **kwargs):
 
-def pred_to_hat(pred, **kwargs):
-    '''
-    pred 转换为 hat，即与gt相同的形式
-
-    params:
-        -* pred: [batch_size, 13, 13, 125]
-        -* kwargs: cfg
-
-    return:
-        -* hat_scores: [batch_size, 13, 13, 5, 1]，
-            两种解释：
-                1、net预测当前cell当前anchor有目标的概率。
-               *2、根据net预测的bboxes+当前ceil当前anchor的prior组成的“目标框”，和gt之间的IOU。
-        -* hat_boxes:  [batch_size, 13, 13, 5, 4]，
-            grid为单位长度时，bound boxes 在feature map上的位置。（yxhw）形式
-        -* hat_clses:  [batch_szie, 13, 13, 5, 20]，
-            取softmax就是预测的目标，因为20类不包括背景，所以要通过一个threshold。
-    '''
     na = kwargs['num_anchors']
     nc = kwargs['num_classes']
     gs = kwargs['grid_size']
@@ -37,8 +20,8 @@ def pred_to_hat(pred, **kwargs):
             pred_cls  = pred[:,:,:,:,5:5+nc]
 
         with tf.variable_scope('prior'):
-            p_x, p_y = tf.meshgrid(tf.range(gs),# height
-                                   tf.range(gs))# width
+            p_x, p_y = tf.meshgrid([i for i in range(gs)],# height
+                                   [i for i in range(gs)])# width
             p_x = tf.cast(tf.reshape(p_x, [1, gs, gs, 1, 1]), tf.float32)
             p_y = tf.cast(tf.reshape(p_y, [1, gs, gs, 1, 1]), tf.float32)
             p_yx = tf.concat([p_y, p_x], axis=4)
@@ -47,31 +30,33 @@ def pred_to_hat(pred, **kwargs):
         with tf.variable_scope("get_hat"):
             hat_yx = (tf.sigmoid(pred_bbox_yx) + p_yx) / gs_f
             hat_hw = tf.exp(pred_bbox_hw) * p_hw / gs_f
-            hat_bbox = tf.concat([hat_yx, hat_hw], axis=-1)
-            hat_conf = tf.sigmoid(pred_conf)
-            hat_cls = tf.sigmoid(pred_cls)
-
-        with tf.variable_scope('hat_to_dense_raw'):
-            # to yxyx
-            ymid, xmid, height, width = tf.unstack(hat_bbox, axis=-1)
+            ymid, xmid = tf.unstack(hat_yx, axis=-1)
+            height, width = tf.unstack(hat_hw, axis=-1)
             ymin = ymid - height / 2.
-            xmin = xmid - width / 2.
+            xmin = xmid - width  / 2.
             ymax = ymid + height / 2.
-            xmax = xmid + width / 2.
-            yxyx_bbox = tf.stack([ymin, xmin, ymax, xmax], axis=-1)
+            xmax = xmid + width  / 2.
 
-            #selected = tf.where(tf.greater(hat_conf, neg_thred))    # 4-D
-            #scores = tf.gather(hat_conf,selected) #* tf.to_float(tf.greater(hat_conf, neg_thred))
-            #clses = tf.gather(hat_cls,selected) * scores
+            hat_bbox = tf.stack([ymin, xmin, ymax, xmax], axis=-1)              # 1x13x13x5x4
+            hat_conf = tf.sigmoid(pred_conf)                                    # 1x13x13x5x1
+            hat_cls  = tf.nn.softmax(pred_cls) * hat_conf                       # 1x13x13x5x20
+            hat_cls_prob = tf.reduce_max(hat_cls, axis=-1, keepdims=True)       # 1x13x13x5x1
+            hat_cls_name = tf.argmax(hat_cls, axis=-1)
+            hat_cls_name = tf.expand_dims(tf.to_float(hat_cls_name), axis=-1)   # 1x13x13x5x1
 
-            decoded_hat = tf.concat([hat_conf, yxyx_bbox, hat_cls*hat_conf], axis=-1)
+        with tf.variable_scope('thred_prob'):
+            mask = tf.greater_equal(hat_cls_prob, thred_prob)
+            mask = mask[..., 0]
+            selected_cls_name = tf.boolean_mask(hat_cls_name, mask)             # ?x1
+            selected_cls_prob = tf.boolean_mask(hat_cls_prob, mask)             # ?x1
+            selected_bbox     = tf.boolean_mask(hat_bbox, mask)                 # ?x4
+
+        decoded_hat = tf.concat([selected_cls_name, selected_cls_prob, selected_bbox], axis=-1)
 
     return decoded_hat
 
 
-# dense_raw to sparse raw
-# only for 1 image
-def nms_tf(dense_raw, thred_iou=0.5, thred_prob=0.2, max_out=10, num_classes=20):
+def nms_tf(dense_raw, thred_iou=0.3, thred_prob=0.3, max_out=10, num_classes=20):
     '''
     return:
         * selected_bboxes, (num_selected_bboxes, 4)
@@ -103,46 +88,42 @@ def nms_tf(dense_raw, thred_iou=0.5, thred_prob=0.2, max_out=10, num_classes=20)
     return selected
 
 
-def nms_np(bboxes, clses, thred_iou=0.5, thred_prob=0.5):
-    assert bboxes.shape[0] == clses.shape[0]
-    assert bboxes.shape[1] == 4
-    assert clses.shape[1] == 20
-    num_bboxes = bboxes.shape[0]
-    num_classes = clses.shape[1]
+def nms_np(pred, thred_iou=0.3, num_classes=20):
+
+    nms = []
+    clses  = pred[:, 0]
+    probs  = pred[:, 1]
+    bboxes = pred[:, 2:6]
 
     for c in range(num_classes):
-        cls = clses[..., c]
-        sorted_indices = np.argsort(-cls)  # 由大到小
+        mask = np.equal(clses, c)
+        num = int(np.sum(mask))
+        if not num: continue    # 如果这个类别没有，循环下一个类别
+        prob = probs[mask]      # ?
+        bbox = bboxes[mask]     # ?x4
+        sorted_indices = np.argsort(-prob)  # 由大到小
 
-        for i in range(num_bboxes):
+        for i in range(num):
             idx_i = sorted_indices[i]
 
-            if cls[idx_i] == 0:
+            if prob[idx_i] == -1:   # 如果是-1，表示被suppress了
                 continue
             else:
-                for j in range(i + 1, num_bboxes):
+                for j in range(i + 1, num):
                     idx_j = sorted_indices[j]
+                    if cal_iou_np(bbox[idx_i], bbox[idx_j]) >= thred_iou:
+                        prob[idx_j] = -1
 
-                    if cal_iou_np(bboxes[idx_i], bboxes[idx_j]) >= thred_iou:
-                        clses[idx_j, c] = 0.0
+        nms_mask = np.greater(prob, 0.0)
+        num_prob = np.expand_dims(prob[nms_mask], -1)
+        num_name = np.ones_like(num_prob) * c
+        nms_bbox = bbox[nms_mask]
+        nms.append(np.concatenate([num_name, num_prob, nms_bbox], axis=-1))
 
-    max_clses_name = np.argmax(clses, axis=-1)
-    max_clses_prob = np.max(clses, axis=-1)
+    return np.concatenate(nms, axis=0)
 
-    nms_clses_idx = np.where(max_clses_prob > thred_prob)
-    nms_clses_name = np.reshape([max_clses_name[nms_clses_idx]], [-1, 1])  # name
-    nms_clses_prob = np.reshape(max_clses_prob[nms_clses_idx], [-1, 1])  # prob
-    nms_bboxes = bboxes[nms_clses_idx]  # bbox
-
-    return np.concatenate([nms_clses_name, nms_clses_prob, nms_bboxes], axis=-1)
 
 def cal_iou_np(bbox1, bbox2):  # ymin, xmin, ymax, xmax
-    assert bbox1.size == 4
-    assert bbox2.size == 4
-    if not bbox1.ndim == 1:
-        bbox1 = np.squeeze(bbox1)
-    if not bbox2.ndim == 1:
-        bbox2 = np.squeeze(bbox2)
 
     lu = np.maximum(bbox1[:2], bbox2[:2])
     rd = np.minimum(bbox1[2:], bbox2[2:])
@@ -150,18 +131,15 @@ def cal_iou_np(bbox1, bbox2):  # ymin, xmin, ymax, xmax
     inter = np.maximum(0.0, rd - lu)
     inter_a = inter[0] * inter[1]
 
-    hw1 = bbox1[2:] - bbox1[:2]
+    hw1 = np.maximum(0.0, bbox1[2:] - bbox1[:2])
     a1 = hw1[0] * hw1[1]
 
-    hw2 = bbox2[2:] - bbox2[:2]
+    hw2 = np.maximum(0.0, bbox2[2:] - bbox2[:2])
     a2 = hw2[0] * hw2[1]
 
-    union_a = a1 + a2 - inter_a
-    iou = np.clip(inter_a / union_a, 0.0, 1.0)
+    union_a = np.maximum(a1 + a2 - inter_a, 1e-10)
+    iou = inter_a / union_a
     return iou
-
-
-
 
 # def find_cell(x):
 #     c = x%5

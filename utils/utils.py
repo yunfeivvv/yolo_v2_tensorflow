@@ -13,29 +13,29 @@ def save_cfg(output_dir, cfg):
                 f.write(cfg_str)
 
 
-def draw_bboxes(img, bboxes, labels, offset=1):
+def draw_bboxes(img, pred, labels, offset=1):
     img = img.copy()
     img_h, img_w = img.shape[:2]
     readable_map = {it[1][0]- offset: it[0] for it in labels.items()}
 
-    for i in range(bboxes.shape[0]):
-        cls = bboxes[i, 0]
-        prob = bboxes[i, 1]
-        bbox = np.clip(bboxes[i, 2:], 0.0, 1.0)
-        if np.any((bbox[2:]-bbox[:2])<[1/img_h,1/img_w]):
-            continue
+    for i in range(pred.shape[0]):
+        cls  = int(pred[i, 0])
+        prob = pred[i, 1]
+        bbox = pred[i, 2:]
+        # if np.any((bbox[2:]-bbox[:2])<[1/img_h,1/img_w]):
+        #     continue
 
         xmin = int(bbox[1] * img_w)
         ymin = int(bbox[0] * img_h)
         xmax = int(bbox[3] * img_w)
         ymax = int(bbox[2] * img_h)
-        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 1)
+        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 3)
         cv2.putText(img,
                     readable_map[cls] + ' ' + str(prob)[:6],
                     (xmin, ymin - 13),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     1e-3 * img_h,
-                    (0, 0, 255), 1)
+                    (0, 255, 0), 1)
     return img
 
 
