@@ -4,7 +4,7 @@ todo:
 
   - [ ], metrics
   - [ ], MobileNet / darknet53
-  - [ ], Test image of variable size
+  - [ ], Test image of unfixed size
   - [x], Data
   - [x], ResNet / darknet19
   - [x], lLoss func
