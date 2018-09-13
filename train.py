@@ -16,7 +16,8 @@ from utils.utils import finetune_init, restore_init
 
 flags = tf.app.flags
 flags.DEFINE_string('yml_path', './config.yml', '')
-flags.DEFINE_string('start_with', 'finetune', 'sketch/finetune / restore')
+flags.DEFINE_string('start_with', 'finetune', 
+                    'scratch/finetune / restore')
 
 flags.DEFINE_string('net_name', 'resnet_v2_50',
                     'yolo_v2 / resnet_v2_50 / resnet_v2_152')
@@ -108,7 +109,7 @@ def main(_):
                                                 allow_soft_placement=GPU_cfg['allow_soft_placement']))
         with sess.as_default():
             # save
-            save_vars = tf.global_variables()
+            save_vars = tf.global_variables()  # model_variables()
             saver = tf.train.Saver(save_vars)
 
             # init
@@ -120,18 +121,17 @@ def main(_):
             elif FLAGS.start_with == 'restore':
                 restore_init(sess, **PATH_cfg['restore'])
 
-            # 开始训练
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(sess, coord=coord)
 
-            train_history = {'loss':[],
+            train_history = {'loss':[], 
                              'step':[]}
             try:
                 print('====== Start Training ======')
 
                 for ep in range(1, TRAIN_cfg['epoches']+1):
                     for xx in range(TRAIN_cfg['ep_size']):
-                        l, m, s, _ = sess.run([loss, train_merge, global_step, train_op])
+                        l, m, s, _ = sess.run([loss, train_merge, global_step, train_op])  
 
                         train_history['loss'].append(l)
                         train_history['step'].append(s)

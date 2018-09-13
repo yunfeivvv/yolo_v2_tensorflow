@@ -55,30 +55,15 @@ def distort_color(image, color_ordering=0, fast_mode=True, scope=None):
     # The random_* ops do not necessarily clamp.
     return tf.clip_by_value(image, 0.0, 1.0)
 
-def tf_image_whitened(image, means):
-    """Subtracts the given means from each image channel.
-
-    Returns:
-        the centered image.
-    """
-    if image.get_shape().ndims != 3:
-        raise ValueError('Input must be of size [height, width, C>0]')
-    num_channels = image.get_shape().as_list()[-1]
-    if len(means) != num_channels:
-        raise ValueError('len(means) must match the number of channels')
-
-    mean = tf.constant(means, dtype=image.dtype)
-    image = image - mean
-    return image
 
 def random_flip_left_right(image, bboxes):
+
     with tf.name_scope('random_flip_left_right'):
         uniform_random = tf.random_uniform([], 0, 1.0)
         mirror_cond = tf.less(uniform_random, .5)
         # Flip image.
         result = tf.cond(mirror_cond, lambda: tf.image.flip_left_right(image), lambda: image)
         # Flip bboxes.
-        mirror_bboxes = tf.stack([bboxes[:, 0], 1 - bboxes[:, 1],
-                                  bboxes[:, 2], 1 - bboxes[:, 3]], axis=-1)
+        mirror_bboxes = tf.stack([bboxes[:, 0], 1.0 - bboxes[:, 3], bboxes[:, 2], 1.0 - bboxes[:, 1]], axis=-1)  # NOTE:注意这里的idx!
         bboxes = tf.cond(mirror_cond, lambda: mirror_bboxes, lambda: bboxes)
     return result, bboxes

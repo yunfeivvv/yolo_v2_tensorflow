@@ -25,17 +25,18 @@ def draw_bboxes(img, pred, labels, offset=1):
         # if np.any((bbox[2:]-bbox[:2])<[1/img_h,1/img_w]):
         #     continue
 
-        xmin = int(bbox[1] * img_w)
-        ymin = int(bbox[0] * img_h)
-        xmax = int(bbox[3] * img_w)
-        ymax = int(bbox[2] * img_h)
-        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (0, 0, 255), 3)
+        xmin = max(int(bbox[1] * img_w), 0)
+        ymin = max(int(bbox[0] * img_h), 0)
+        xmax = min(int(bbox[3] * img_w), img_w)
+        ymax = min(int(bbox[2] * img_h), img_h)
+
+        cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (255, 0, 0), 1)
         cv2.putText(img,
-                    readable_map[cls] + ' ' + str(prob)[:6],
+                    readable_map[cls] + ' ' + str(prob)[:4],
                     (xmin, ymin - 13),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     1e-3 * img_h,
-                    (0, 255, 0), 1)
+                    (255, 0, 0), 1)
     return img
 
 
