@@ -7,7 +7,7 @@ todo:
   - [ ], Test image of unfixed size
   - [x], Data
   - [x], ResNet / darknet19
-  - [x], lLoss func
+  - [x], Loss func
   - [x], NMS
 
 示例：  
