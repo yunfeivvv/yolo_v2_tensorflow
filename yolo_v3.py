@@ -99,12 +99,14 @@ def cal_iou(boxes1, boxes2, type1='yxhw', type2='yxhw'):
 #
 #   network.py
 #
-def v3_arg_scope():
+def v3_arg_scope(is_training):
     with slim.arg_scope([slim.conv2d],
                         activation_fn=tf.nn.leaky_relu,
                         normalizer_fn=slim.batch_norm,
                         weights_initializer=tf.contrib.layers.variance_scaling_initializer(),
-                        weights_regularizer=slim.l2_regularizer(1.0)) as sc:
+                        weights_regularizer=slim.l2_regularizer(1.0)),\
+        slim.arg_scope([slim.batch_norm],
+                       is_training=is_training) as sc:
         return sc
 
 def block(inputs, num, scope):
@@ -127,7 +129,7 @@ def upsample(net, out_shape):
         net = net[:, 2:-2, 2:-2, :]
         return net
 
-def darknet_53_backbone(inputs, is_training):
+def darknet_53_backbone(inputs):
 
     with tf.variable_scope('darknet_53', [inputs]) as sc:
         end_points_collection = sc.name + '_end_points'
@@ -212,6 +214,11 @@ def v3_head(feats1, feats2, feats3, num_classes=20):
 
         return pred1, pred2, pred3
 
+def v3_norm(inputs):
+    if not inputs.dtype == tf.float32:
+        inputs = tf.to_float(inputs)
+    inputs = inputs / 255.
+    return inputs
 #
 #   loss.py
 #
@@ -261,7 +268,7 @@ def loss_layer(pred, gt, anchor):
         hat_conf = pred_conf
         hat_cls  = pred_cls
 
-    with tf.variable_scope('generate_mask'):
+    with tf.variable_scope('generate_mask'):  # todo 这里可能有问题
         ious = cal_iou(tf.expand_dims(p_bbox, axis=-2),         # 1,  h, w, 3, 1, 4
                        tf.expand_dims(gt[..., 1:5], axis=-3))   # 16, h, w, 1, 3, 4 / r: 16, h, w, 3, 3
         best_ious = tf.reduce_max(ious, axis=-1)                # 16, h, w, 3
